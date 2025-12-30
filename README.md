@@ -1,170 +1,181 @@
-# GitHub Telegram Bot 🤖
+# <div align="center">GitHub Telegram Bot</div>
 
-一个使用 Go 语言开发的 Telegram 机器人，用于监控 **任意 GitHub 公有仓库** 的变动。
+<div align="center">
+  <strong>Monitor any public GitHub repository via Telegram</strong>
+</div>
 
-## ✨ 功能特性
+<br>
 
-- 📨 **Push 监控** - 实时接收新提交通知
-- 🎉 **Release 监控** - 新版本发布提醒
-- 📝 **Issue 监控** - Issue 创建/关闭/重开通知
-- 🔀 **Pull Request 监控** - PR 状态变更提醒
-- 🌍 **监控任意公有仓库** - 不需要仓库管理权限
-- 💾 **持久化存储** - SQLite 数据库存储订阅信息
+<div align="center">
+  <a href="#"><img src="https://img.shields.io/badge/version-v1.0.0-9644F4?style=for-the-badge" alt="Version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-E53935?style=for-the-badge" alt="License"></a>
+  <a href="https://go.dev/"><img src="https://img.shields.io/badge/Go-1.23+-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go"></a>
+  <a href="https://hub.docker.com/r/gemiluxvii/github-telegram-bot"><img src="https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker"></a>
+</div>
 
-## 📁 项目结构
+<div align="center">
+  <a href="https://github.com/"><img src="https://img.shields.io/badge/GitHub-API-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub"></a>
+  <a href="https://telegram.org/"><img src="https://img.shields.io/badge/Telegram-Bot-26A5E4?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram"></a>
+  <a href="https://www.sqlite.org/"><img src="https://img.shields.io/badge/SQLite-Storage-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite"></a>
+</div>
+
+<br>
+
+<div align="center">
+  <a href="#features">Features</a> •
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#bot-commands">Commands</a> •
+  <a href="README_CN.md">中文文档</a>
+</div>
+
+---
+
+## Features
+
+- **Push Notifications** - Receive alerts for new commits
+- **Release Notifications** - Get notified when new versions are published
+- **Issue Tracking** - Monitor issue creation, closure, and reopening
+- **Pull Request Tracking** - Track PR status changes
+- **Monitor Any Public Repo** - No repository admin access required
+- **Persistent Storage** - SQLite database for subscription management
+
+## Project Structure
 
 ```
 githubbot/
-├── cmd/bot/              # 程序入口
+├── cmd/bot/              # Application entry point
 ├── internal/
-│   ├── config/           # 配置管理
-│   ├── github/           # GitHub API、Webhook 和轮询
-│   ├── notifier/         # 通知服务
-│   ├── storage/          # 数据存储
-│   └── telegram/         # Telegram Bot
-├── pkg/logger/           # 日志工具
-├── configs/              # 配置文件
+│   ├── config/           # Configuration management
+│   ├── github/           # GitHub API, Webhook, and Polling
+│   ├── notifier/         # Notification service
+│   ├── storage/          # Data persistence
+│   └── telegram/         # Telegram Bot handlers
+├── pkg/logger/           # Logging utilities
+├── configs/              # Configuration files
 ├── Dockerfile
 └── docker-compose.yml
 ```
 
-## 🔄 监控模式
+## Monitoring Modes
 
-| 模式 | 说明 | 适用场景 |
-|------|------|----------|
-| **polling** (推荐) | 定时轮询 GitHub API | 监控任意公有仓库 |
-| **webhook** | 接收 GitHub 推送 | 仅限有管理权限的仓库 |
-| **both** | 同时启用两种模式 | 混合场景 |
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| **polling** (recommended) | Periodically polls GitHub API | Monitor any public repository |
+| **webhook** | Receives GitHub push events | Only for repos you administer |
+| **both** | Enables both modes | Mixed scenarios |
 
-> 💡 **推荐使用 polling 模式**，因为它可以监控任何公有仓库，无需配置 Webhook。
+> **Note:** Polling mode is recommended as it can monitor any public repository without webhook configuration.
 
-## 🚀 快速开始
+## Quick Start
 
-### 前置要求
+### Prerequisites
 
 - Go 1.21+
-- Telegram Bot Token (从 [@BotFather](https://t.me/BotFather) 获取)
-- GitHub Personal Access Token (可选，但强烈建议)
+- Telegram Bot Token (from [@BotFather](https://t.me/BotFather))
+- GitHub Personal Access Token (optional but strongly recommended)
 
-### 安装步骤
+### Installation
 
-1. **克隆仓库**
+1. **Clone the repository**
    ```bash
    git clone https://github.com/your-username/githubbot.git
    cd githubbot
    ```
 
-2. **安装依赖**
+2. **Install dependencies**
    ```bash
    go mod download
    ```
 
-3. **配置**
+3. **Configure**
    ```bash
    cp configs/config.example.yaml configs/config.yaml
-   # 编辑 config.yaml，填入你的配置
+   # Edit config.yaml with your settings
    ```
 
-4. **运行**
+4. **Run**
    ```bash
    go run ./cmd/bot -config configs/config.yaml
    ```
 
-### Docker 部署
+### Docker Deployment
+
+**Using Docker Hub image:**
 
 ```bash
-# 准备配置文件
-cp configs/config.example.yaml configs/config.yaml
-# 编辑配置...
+docker pull gemiluxvii/github-telegram-bot:latest
 
-# 启动
-docker-compose up -d
-
-# 查看日志
-docker-compose logs -f
+docker run -d \
+  -v ./configs/config.yaml:/app/configs/config.yaml \
+  -v ./data:/app/data \
+  gemiluxvii/github-telegram-bot:latest
 ```
 
-## ⚙️ 配置说明
+**Using docker-compose:**
+
+```bash
+cp configs/config.example.yaml configs/config.yaml
+docker-compose up -d
+```
+
+## Configuration
 
 ```yaml
 telegram:
-  token: "YOUR_BOT_TOKEN"      # Telegram Bot Token
-  debug: false                  # 调试模式
+  token: "YOUR_BOT_TOKEN"
+  debug: false
 
 github:
-  token: "ghp_xxxx"             # GitHub Token (强烈建议设置)
-  mode: "polling"               # polling / webhook / both
-  poll_interval: 300            # 轮询间隔 (秒)
-  webhook_secret: ""            # Webhook 密钥 (webhook模式)
+  token: "ghp_xxxx"           # Strongly recommended
+  mode: "polling"             # polling / webhook / both
+  poll_interval: 300          # Seconds
 
 database:
-  path: "./data/bot.db"         # 数据库路径
+  path: "./data/bot.db"
 
 server:
-  host: "0.0.0.0"               # 监听地址
-  port: 8080                    # 监听端口
+  host: "0.0.0.0"
+  port: 8080
 ```
 
-### 环境变量配置
+### Environment Variables
 
-所有配置项都可以通过环境变量设置，格式为 `GHBOT_<SECTION>_<KEY>`：
+Format: `GHBOT_<SECTION>_<KEY>`
 
 ```bash
 export GHBOT_TELEGRAM_TOKEN="your-bot-token"
 export GHBOT_GITHUB_TOKEN="ghp_xxxx"
 export GHBOT_GITHUB_MODE="polling"
-export GHBOT_GITHUB_POLL_INTERVAL="300"
 ```
 
 ### GitHub Token
 
-强烈建议配置 GitHub Token：
-- **无 Token**: 60 次请求/小时
-- **有 Token**: 5000 次请求/小时
+- **Without Token**: 60 requests/hour
+- **With Token**: 5000 requests/hour
 
-获取地址: https://github.com/settings/tokens
+Get one at: https://github.com/settings/tokens
 
-## 🤖 Bot 命令
+## Bot Commands
 
-| 命令 | 说明 |
-|------|------|
-| `/start` | 显示欢迎信息 |
-| `/help` | 显示帮助文档 |
-| `/subscribe <owner/repo>` | 订阅仓库 |
-| `/unsubscribe <owner/repo>` | 取消订阅 |
-| `/list` | 查看当前订阅 |
+| Command | Description |
+|---------|-------------|
+| `/start` | Display welcome message |
+| `/help` | Show help documentation |
+| `/subscribe <owner/repo>` | Subscribe to a repository |
+| `/unsubscribe <owner/repo>` | Unsubscribe from a repository |
+| `/list` | View current subscriptions |
+| `/status` | Show bot status and API quota |
 
-**快捷命令：**
-- `/sub` = `/subscribe`
-- `/unsub` = `/unsubscribe`
+**Shortcuts:** `/sub`, `/unsub`
 
-## 📝 使用示例
+## Usage Examples
 
-1. 在 Telegram 中搜索你的 Bot 并开始对话
-2. 发送 `/subscribe torvalds/linux` 订阅 Linux 内核仓库
-3. 等待通知！当仓库有新的活动时，你将收到消息
-
-**可以订阅任何公有仓库，例如：**
 ```
+/subscribe torvalds/linux
 /subscribe microsoft/vscode
 /subscribe golang/go
-/subscribe facebook/react
-/subscribe kubernetes/kubernetes
 ```
 
-## 🛠️ 开发
-
-```bash
-# 运行测试
-go test ./...
-
-# 构建
-go build -o bot ./cmd/bot
-
-# 运行 (开发模式)
-go run ./cmd/bot -config configs/config.yaml
-```
-
-## 📄 License
+## License
 
 MIT License
