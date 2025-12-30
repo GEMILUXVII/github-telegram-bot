@@ -1,6 +1,6 @@
 module github.com/user/githubbot
 
-go 1.25.5
+go 1.24.0
 
 require (
 	github.com/go-chi/chi/v5 v5.2.3
