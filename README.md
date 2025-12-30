@@ -103,18 +103,31 @@ githubbot/
 **Using Docker Hub image:**
 
 ```bash
+# 1. Pull the image
 docker pull gemiluxvii/github-telegram-bot:latest
 
-docker run -d \
-  -v ./configs/config.yaml:/app/configs/config.yaml \
-  -v ./data:/app/data \
+# 2. Create config file (IMPORTANT: must exist before mounting)
+mkdir -p configs data
+docker run --rm gemiluxvii/github-telegram-bot:latest \
+  cat /app/configs/config.example.yaml > configs/config.yaml
+
+# 3. Edit config.yaml with your tokens
+vi configs/config.yaml
+
+# 4. Run the container
+docker run -d --name github-bot \
+  -v $(pwd)/configs/config.yaml:/app/configs/config.yaml \
+  -v $(pwd)/data:/app/data \
   gemiluxvii/github-telegram-bot:latest
 ```
 
 **Using docker-compose:**
 
 ```bash
-cp configs/config.example.yaml configs/config.yaml
+mkdir -p configs data
+docker run --rm gemiluxvii/github-telegram-bot:latest \
+  cat /app/configs/config.example.yaml > configs/config.yaml
+vi configs/config.yaml
 docker-compose up -d
 ```
 

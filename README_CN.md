@@ -103,18 +103,31 @@ githubbot/
 **使用 Docker Hub 镜像：**
 
 ```bash
+# 1. 拉取镜像
 docker pull gemiluxvii/github-telegram-bot:latest
 
-docker run -d \
-  -v ./configs/config.yaml:/app/configs/config.yaml \
-  -v ./data:/app/data \
+# 2. 创建配置文件（重要：挂载前必须先创建文件）
+mkdir -p configs data
+docker run --rm gemiluxvii/github-telegram-bot:latest \
+  cat /app/configs/config.example.yaml > configs/config.yaml
+
+# 3. 编辑配置文件，填入你的 Token
+vi configs/config.yaml
+
+# 4. 启动容器
+docker run -d --name github-bot \
+  -v $(pwd)/configs/config.yaml:/app/configs/config.yaml \
+  -v $(pwd)/data:/app/data \
   gemiluxvii/github-telegram-bot:latest
 ```
 
 **使用 docker-compose：**
 
 ```bash
-cp configs/config.example.yaml configs/config.yaml
+mkdir -p configs data
+docker run --rm gemiluxvii/github-telegram-bot:latest \
+  cat /app/configs/config.example.yaml > configs/config.yaml
+vi configs/config.yaml
 docker-compose up -d
 ```
 
