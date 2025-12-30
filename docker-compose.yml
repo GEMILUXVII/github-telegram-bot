@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  githubbot:
+    build: .
+    container_name: github-telegram-bot
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      # Mount configuration file
+      - ./configs/config.yaml:/app/configs/config.yaml:ro
+      # Persist database
+      - ./data:/app/data
+    environment:
+      # Can also configure via environment variables
+      # GHBOT_TELEGRAM_TOKEN: "your-token"
+      # GHBOT_GITHUB_WEBHOOK_SECRET: "your-secret"
+      TZ: Asia/Shanghai
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

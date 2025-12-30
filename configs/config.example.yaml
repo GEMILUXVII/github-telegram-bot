@@ -1,0 +1,42 @@
+# Telegram Bot 配置
+telegram:
+  # 从 @BotFather 获取的 Bot Token
+  token: ""
+  # 是否启用调试模式
+  debug: false
+
+# GitHub 配置
+github:
+  # GitHub Personal Access Token (强烈建议设置，否则 API 限制很低)
+  # 无 Token: 60 次/小时, 有 Token: 5000 次/小时
+  # 获取地址: https://github.com/settings/tokens
+  token: ""
+  
+  # Webhook 密钥 (仅 webhook 模式需要)
+  webhook_secret: ""
+  
+  # 监控模式:
+  #   - "polling"  : 轮询模式，可监控任意公有仓库 (推荐)
+  #   - "webhook"  : Webhook 模式，需要仓库管理权限
+  #   - "both"     : 同时启用两种模式
+  mode: "polling"
+  
+  # 轮询间隔 (秒)，建议不低于 300 秒 (5分钟) 以避免 API 限制
+  poll_interval: 300
+
+# 数据库配置
+database:
+  # SQLite 数据库文件路径
+  path: "./data/bot.db"
+
+# HTTP 服务器配置 (用于接收 Webhook 和健康检查)
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+# 日志配置
+log:
+  # 日志级别: debug, info, warn, error
+  level: "info"
+  # 日志文件路径 (为空则只输出到控制台)
+  file: ""
