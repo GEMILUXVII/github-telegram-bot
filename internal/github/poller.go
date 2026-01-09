@@ -306,13 +306,15 @@ func (p *Poller) pollReleases(ctx context.Context, owner, name string) {
 			RepoOwner: owner,
 			RepoName:  name,
 			Payload: &ReleaseEvent{
-				Action:     "published",
-				TagName:    tagName,
-				Name:       release.GetName(),
-				Body:       release.GetBody(),
-				Prerelease: release.GetPrerelease(),
-				URL:        release.GetHTMLURL(),
-				Author:     UserInfo{Login: release.GetAuthor().GetLogin()},
+				Action:      "published",
+				TagName:     tagName,
+				Name:        release.GetName(),
+				Body:        release.GetBody(),
+				Prerelease:  release.GetPrerelease(),
+				URL:         release.GetHTMLURL(),
+				Author:      UserInfo{Login: release.GetAuthor().GetLogin()},
+				PublishedAt: release.GetPublishedAt().Time,
+				Assets:      extractReleaseAssets(release.Assets),
 			},
 		}
 
@@ -375,14 +377,15 @@ func (p *Poller) pollIssues(ctx context.Context, owner, name string) {
 			RepoOwner: owner,
 			RepoName:  name,
 			Payload: &IssueEvent{
-				Action: "opened",
-				Number: number,
-				Title:  issue.GetTitle(),
-				Body:   issue.GetBody(),
-				State:  issue.GetState(),
-				URL:    issue.GetHTMLURL(),
-				User:   UserInfo{Login: issue.GetUser().GetLogin()},
-				Labels: labels,
+				Action:    "opened",
+				Number:    number,
+				Title:     issue.GetTitle(),
+				Body:      issue.GetBody(),
+				State:     issue.GetState(),
+				URL:       issue.GetHTMLURL(),
+				User:      UserInfo{Login: issue.GetUser().GetLogin()},
+				Labels:    labels,
+				CreatedAt: issue.GetCreatedAt().Time,
 			},
 		}
 
@@ -414,14 +417,15 @@ func (p *Poller) notifyIssueClosed(owner, name string, issue *gh.Issue) {
 		RepoOwner: owner,
 		RepoName:  name,
 		Payload: &IssueEvent{
-			Action: "closed",
-			Number: number,
-			Title:  issue.GetTitle(),
-			Body:   issue.GetBody(),
-			State:  "closed",
-			URL:    issue.GetHTMLURL(),
-			User:   UserInfo{Login: issue.GetUser().GetLogin()},
-			Labels: labels,
+			Action:    "closed",
+			Number:    number,
+			Title:     issue.GetTitle(),
+			Body:      issue.GetBody(),
+			State:     "closed",
+			URL:       issue.GetHTMLURL(),
+			User:      UserInfo{Login: issue.GetUser().GetLogin()},
+			Labels:    labels,
+			CreatedAt: issue.GetCreatedAt().Time,
 		},
 	}
 
@@ -484,6 +488,7 @@ func (p *Poller) pollPullRequests(ctx context.Context, owner, name string) {
 				Commits:   pr.GetCommits(),
 				Base:      BranchInfo{Ref: pr.GetBase().GetRef()},
 				Head:      BranchInfo{Ref: pr.GetHead().GetRef()},
+				CreatedAt: pr.GetCreatedAt().Time,
 			},
 		}
 
@@ -533,6 +538,7 @@ func (p *Poller) notifyPRClosed(owner, name string, pr *gh.PullRequest) {
 			Commits:   pr.GetCommits(),
 			Base:      BranchInfo{Ref: pr.GetBase().GetRef()},
 			Head:      BranchInfo{Ref: pr.GetHead().GetRef()},
+			CreatedAt: pr.GetCreatedAt().Time,
 		},
 	}
 
@@ -541,4 +547,18 @@ func (p *Poller) notifyPRClosed(owner, name string, pr *gh.PullRequest) {
 		logger.Debug().Str("repo", owner+"/"+name).Int("pr", number).Str("action", action).Msg("PR closed/merged detected")
 	default:
 	}
+}
+
+// extractReleaseAssets extracts asset information from GitHub release.
+func extractReleaseAssets(assets []*gh.ReleaseAsset) []ReleaseAsset {
+	result := make([]ReleaseAsset, 0, len(assets))
+	for _, a := range assets {
+		result = append(result, ReleaseAsset{
+			Name:          a.GetName(),
+			DownloadURL:   a.GetBrowserDownloadURL(),
+			Size:          int64(a.GetSize()),
+			DownloadCount: a.GetDownloadCount(),
+		})
+	}
+	return result
 }

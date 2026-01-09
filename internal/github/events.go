@@ -36,6 +36,8 @@ type CommitInfo struct {
 	Added     []string
 	Removed   []string
 	Modified  []string
+	Additions int // Lines added
+	Deletions int // Lines deleted
 }
 
 // ReleaseEvent represents a release event.
@@ -49,19 +51,29 @@ type ReleaseEvent struct {
 	URL         string
 	Author      UserInfo
 	PublishedAt time.Time
+	Assets      []ReleaseAsset // Download assets
+}
+
+// ReleaseAsset represents a downloadable asset in a release.
+type ReleaseAsset struct {
+	Name          string
+	DownloadURL   string
+	Size          int64 // Size in bytes
+	DownloadCount int
 }
 
 // IssueEvent represents an issue event.
 type IssueEvent struct {
-	Action   string // opened, closed, reopened, edited, etc.
-	Number   int
-	Title    string
-	Body     string
-	State    string // open, closed
-	URL      string
-	User     UserInfo
-	Labels   []string
-	Assignee *UserInfo
+	Action    string // opened, closed, reopened, edited, etc.
+	Number    int
+	Title     string
+	Body      string
+	State     string // open, closed
+	URL       string
+	User      UserInfo
+	Labels    []string
+	Assignee  *UserInfo
+	CreatedAt time.Time
 }
 
 // PullRequestEvent represents a pull request event.
@@ -80,6 +92,7 @@ type PullRequestEvent struct {
 	Additions int
 	Deletions int
 	Commits   int
+	CreatedAt time.Time
 }
 
 // BranchInfo represents branch information in a PR.
@@ -102,26 +115,39 @@ func (e *PushEvent) FormatMessage(repo RepoInfo) string {
 	commitCount := len(e.Commits)
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("<b>[PUSH]</b> %s/%s\n\n", escapeHTML(repo.Owner), escapeHTML(repo.Name)))
-	sb.WriteString(fmt.Sprintf("Branch: %s\n", escapeHTML(branch)))
-	sb.WriteString(fmt.Sprintf("Author: %s\n", escapeHTML(e.Pusher.Login)))
-	sb.WriteString(fmt.Sprintf("Commits: %d\n\n", commitCount))
+	sb.WriteString(fmt.Sprintf("<b>[PUSH]</b> %s/%s\n", escapeHTML(repo.Owner), escapeHTML(repo.Name)))
 
-	// Show up to 5 commits
+	// Calculate total changes
+	var totalAdd, totalDel int
+	for _, c := range e.Commits {
+		totalAdd += c.Additions
+		totalDel += c.Deletions
+	}
+
+	sb.WriteString(fmt.Sprintf("\nBranch: <code>%s</code>\n", escapeHTML(branch)))
+	sb.WriteString(fmt.Sprintf("Author: %s\n", escapeHTML(e.Pusher.Login)))
+	if totalAdd > 0 || totalDel > 0 {
+		sb.WriteString(fmt.Sprintf("Changes: %d commits, <code>+%d/-%d</code>\n", commitCount, totalAdd, totalDel))
+	} else {
+		sb.WriteString(fmt.Sprintf("Commits: %d\n", commitCount))
+	}
+
+	// Show commits
 	maxCommits := 5
 	if len(e.Commits) < maxCommits {
 		maxCommits = len(e.Commits)
 	}
 
+	sb.WriteString("\n")
 	for i := 0; i < maxCommits; i++ {
 		commit := e.Commits[i]
 		shortSHA := commit.SHA[:7]
-		shortMsg := escapeHTML(sanitizeUTF8(truncateString(getFirstLine(commit.Message), 50)))
+		shortMsg := escapeHTML(sanitizeUTF8(truncateString(getFirstLine(commit.Message), 45)))
 		sb.WriteString(fmt.Sprintf("<code>%s</code> %s\n", shortSHA, shortMsg))
 	}
 
 	if len(e.Commits) > 5 {
-		sb.WriteString(fmt.Sprintf("\n... and %d more\n", len(e.Commits)-5))
+		sb.WriteString(fmt.Sprintf("<i>... and %d more</i>\n", len(e.Commits)-5))
 	}
 
 	sb.WriteString(fmt.Sprintf("\n<a href=\"%s\">View Changes</a>", escapeHTMLAttr(e.Compare)))
@@ -142,14 +168,38 @@ func (e *ReleaseEvent) FormatMessage(repo RepoInfo) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("<b>[%s]</b> %s/%s\n\n", label, escapeHTML(repo.Owner), escapeHTML(repo.Name)))
-	sb.WriteString(fmt.Sprintf("Version: %s\n", escapeHTML(name)))
-	sb.WriteString(fmt.Sprintf("Tag: %s\n", escapeHTML(e.TagName)))
+	sb.WriteString(fmt.Sprintf("<b>[%s]</b> %s/%s\n", label, escapeHTML(repo.Owner), escapeHTML(repo.Name)))
+
+	// Time
+	if !e.PublishedAt.IsZero() {
+		sb.WriteString(fmt.Sprintf("\n<i>%s</i>\n", e.PublishedAt.Format("2006-01-02 15:04 MST")))
+	}
+
+	sb.WriteString(fmt.Sprintf("\nVersion: <b>%s</b>\n", escapeHTML(name)))
+	sb.WriteString(fmt.Sprintf("Tag: <code>%s</code>\n", escapeHTML(e.TagName)))
 	sb.WriteString(fmt.Sprintf("Author: %s\n", escapeHTML(e.Author.Login)))
 
+	// Body preview
 	if e.Body != "" {
-		body := escapeHTML(sanitizeUTF8(truncateString(e.Body, 200)))
-		sb.WriteString(fmt.Sprintf("\n%s\n", body))
+		body := escapeHTML(sanitizeUTF8(truncateString(getFirstLine(e.Body), 150)))
+		sb.WriteString(fmt.Sprintf("\n<i>\"%s\"</i>\n", body))
+	}
+
+	// Assets
+	if len(e.Assets) > 0 {
+		sb.WriteString("\nAssets:\n")
+		maxAssets := 5
+		if len(e.Assets) < maxAssets {
+			maxAssets = len(e.Assets)
+		}
+		for i := 0; i < maxAssets; i++ {
+			asset := e.Assets[i]
+			sizeStr := formatFileSize(asset.Size)
+			sb.WriteString(fmt.Sprintf("- %s (%s)\n", escapeHTML(asset.Name), sizeStr))
+		}
+		if len(e.Assets) > 5 {
+			sb.WriteString(fmt.Sprintf("<i>... and %d more</i>\n", len(e.Assets)-5))
+		}
 	}
 
 	sb.WriteString(fmt.Sprintf("\n<a href=\"%s\">View Release</a>", escapeHTMLAttr(e.URL)))
@@ -162,8 +212,14 @@ func (e *IssueEvent) FormatMessage(repo RepoInfo) string {
 	label := fmt.Sprintf("ISSUE %s", strings.ToUpper(e.Action))
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("<b>[%s]</b> %s/%s\n\n", label, escapeHTML(repo.Owner), escapeHTML(repo.Name)))
-	sb.WriteString(fmt.Sprintf("#%d %s\n", e.Number, escapeHTML(sanitizeUTF8(e.Title))))
+	sb.WriteString(fmt.Sprintf("<b>[%s]</b> %s/%s\n", label, escapeHTML(repo.Owner), escapeHTML(repo.Name)))
+
+	// Time
+	if !e.CreatedAt.IsZero() {
+		sb.WriteString(fmt.Sprintf("\n<i>%s</i>\n", e.CreatedAt.Format("2006-01-02 15:04 MST")))
+	}
+
+	sb.WriteString(fmt.Sprintf("\n<b>#%d</b> %s\n", e.Number, escapeHTML(sanitizeUTF8(e.Title))))
 	sb.WriteString(fmt.Sprintf("Author: %s\n", escapeHTML(e.User.Login)))
 
 	if len(e.Labels) > 0 {
@@ -172,6 +228,12 @@ func (e *IssueEvent) FormatMessage(repo RepoInfo) string {
 			escapedLabels[i] = escapeHTML(l)
 		}
 		sb.WriteString(fmt.Sprintf("Labels: %s\n", strings.Join(escapedLabels, ", ")))
+	}
+
+	// Body preview
+	if e.Body != "" {
+		body := escapeHTML(sanitizeUTF8(truncateString(getFirstLine(e.Body), 120)))
+		sb.WriteString(fmt.Sprintf("\n<i>\"%s\"</i>\n", body))
 	}
 
 	sb.WriteString(fmt.Sprintf("\n<a href=\"%s\">View Issue</a>", escapeHTMLAttr(e.URL)))
@@ -188,13 +250,25 @@ func (e *PullRequestEvent) FormatMessage(repo RepoInfo) string {
 	label := fmt.Sprintf("PR %s", strings.ToUpper(action))
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("<b>[%s]</b> %s/%s\n\n", label, escapeHTML(repo.Owner), escapeHTML(repo.Name)))
-	sb.WriteString(fmt.Sprintf("#%d %s\n", e.Number, escapeHTML(sanitizeUTF8(e.Title))))
+	sb.WriteString(fmt.Sprintf("<b>[%s]</b> %s/%s\n", label, escapeHTML(repo.Owner), escapeHTML(repo.Name)))
+
+	// Time
+	if !e.CreatedAt.IsZero() {
+		sb.WriteString(fmt.Sprintf("\n<i>%s</i>\n", e.CreatedAt.Format("2006-01-02 15:04 MST")))
+	}
+
+	sb.WriteString(fmt.Sprintf("\n<b>#%d</b> %s\n", e.Number, escapeHTML(sanitizeUTF8(e.Title))))
 	sb.WriteString(fmt.Sprintf("Author: %s\n", escapeHTML(e.User.Login)))
-	sb.WriteString(fmt.Sprintf("Branch: %s -> %s\n", escapeHTML(e.Head.Ref), escapeHTML(e.Base.Ref)))
+	sb.WriteString(fmt.Sprintf("Branch: <code>%s</code> -> <code>%s</code>\n", escapeHTML(e.Head.Ref), escapeHTML(e.Base.Ref)))
 
 	if e.Commits > 0 {
-		sb.WriteString(fmt.Sprintf("Stats: %d commits, +%d/-%d lines\n", e.Commits, e.Additions, e.Deletions))
+		sb.WriteString(fmt.Sprintf("Stats: %d commits, <code>+%d/-%d</code> lines\n", e.Commits, e.Additions, e.Deletions))
+	}
+
+	// Body preview
+	if e.Body != "" {
+		body := escapeHTML(sanitizeUTF8(truncateString(getFirstLine(e.Body), 100)))
+		sb.WriteString(fmt.Sprintf("\n<i>\"%s\"</i>\n", body))
 	}
 
 	sb.WriteString(fmt.Sprintf("\n<a href=\"%s\">View Pull Request</a>", escapeHTMLAttr(e.URL)))
@@ -210,6 +284,20 @@ func extractBranchName(ref string) string {
 		return ref[11:]
 	}
 	return ref
+}
+
+// formatFileSize formats bytes into human-readable size.
+func formatFileSize(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
 func truncateString(s string, maxLen int) string {
