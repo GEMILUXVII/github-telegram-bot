@@ -136,7 +136,7 @@ func (n *Notifier) isEventEnabled(sub storage.Subscription, eventType storage.Ev
 // sendNotification sends a message to a chat.
 func (n *Notifier) sendNotification(chatID int64, message string) error {
 	msg := tgbotapi.NewMessage(chatID, message)
-	msg.ParseMode = tgbotapi.ModeMarkdown
+	msg.ParseMode = tgbotapi.ModeHTML
 	msg.DisableWebPagePreview = true
 
 	_, err := n.bot.Send(msg)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // Event represents a generic GitHub event.
@@ -99,13 +100,12 @@ type UserInfo struct {
 func (e *PushEvent) FormatMessage(repo RepoInfo) string {
 	branch := extractBranchName(e.Ref)
 	commitCount := len(e.Commits)
-	commitWord := "commit"
-	if commitCount > 1 {
-		commitWord = "commits"
-	}
 
-	msg := fmt.Sprintf("🔨 *%s* pushed %d %s to `%s`\n\n",
-		e.Pusher.Login, commitCount, commitWord, branch)
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("<b>[PUSH]</b> %s/%s\n\n", escapeHTML(repo.Owner), escapeHTML(repo.Name)))
+	sb.WriteString(fmt.Sprintf("Branch: %s\n", escapeHTML(branch)))
+	sb.WriteString(fmt.Sprintf("Author: %s\n", escapeHTML(e.Pusher.Login)))
+	sb.WriteString(fmt.Sprintf("Commits: %d\n\n", commitCount))
 
 	// Show up to 5 commits
 	maxCommits := 5
@@ -116,102 +116,90 @@ func (e *PushEvent) FormatMessage(repo RepoInfo) string {
 	for i := 0; i < maxCommits; i++ {
 		commit := e.Commits[i]
 		shortSHA := commit.SHA[:7]
-		shortMsg := escapeMarkdown(truncateString(commit.Message, 50))
-		msg += fmt.Sprintf("• [`%s`](%s) %s\n", shortSHA, commit.URL, shortMsg)
+		shortMsg := escapeHTML(sanitizeUTF8(truncateString(getFirstLine(commit.Message), 50)))
+		sb.WriteString(fmt.Sprintf("<code>%s</code> %s\n", shortSHA, shortMsg))
 	}
 
 	if len(e.Commits) > 5 {
-		msg += fmt.Sprintf("\n_...and %d more commits_\n", len(e.Commits)-5)
+		sb.WriteString(fmt.Sprintf("\n... and %d more\n", len(e.Commits)-5))
 	}
 
-	msg += fmt.Sprintf("\n[Compare changes](%s)", e.Compare)
+	sb.WriteString(fmt.Sprintf("\n<a href=\"%s\">View Changes</a>", escapeHTMLAttr(e.Compare)))
 
-	return msg
+	return sb.String()
 }
 
 // FormatReleaseMessage formats a release event as a notification message.
 func (e *ReleaseEvent) FormatMessage(repo RepoInfo) string {
-	emoji := "🎉"
-	if e.Prerelease {
-		emoji = "🧪"
-	}
-
 	name := e.Name
 	if name == "" {
 		name = e.TagName
 	}
 
-	msg := fmt.Sprintf("%s *New Release: %s*\n\n", emoji, name)
-	msg += fmt.Sprintf("📦 Tag: `%s`\n", e.TagName)
-	msg += fmt.Sprintf("👤 Author: %s\n", e.Author.Login)
-
-	if e.Body != "" {
-		body := truncateString(e.Body, 300)
-		msg += fmt.Sprintf("\n%s\n", body)
+	label := "RELEASE"
+	if e.Prerelease {
+		label = "PRE-RELEASE"
 	}
 
-	msg += fmt.Sprintf("\n[View Release](%s)", e.URL)
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("<b>[%s]</b> %s/%s\n\n", label, escapeHTML(repo.Owner), escapeHTML(repo.Name)))
+	sb.WriteString(fmt.Sprintf("Version: %s\n", escapeHTML(name)))
+	sb.WriteString(fmt.Sprintf("Tag: %s\n", escapeHTML(e.TagName)))
+	sb.WriteString(fmt.Sprintf("Author: %s\n", escapeHTML(e.Author.Login)))
 
-	return msg
+	if e.Body != "" {
+		body := escapeHTML(sanitizeUTF8(truncateString(e.Body, 200)))
+		sb.WriteString(fmt.Sprintf("\n%s\n", body))
+	}
+
+	sb.WriteString(fmt.Sprintf("\n<a href=\"%s\">View Release</a>", escapeHTMLAttr(e.URL)))
+
+	return sb.String()
 }
 
 // FormatIssueMessage formats an issue event as a notification message.
 func (e *IssueEvent) FormatMessage(repo RepoInfo) string {
-	actionEmoji := map[string]string{
-		"opened":   "📝",
-		"closed":   "✅",
-		"reopened": "🔄",
-	}
+	label := fmt.Sprintf("ISSUE %s", strings.ToUpper(e.Action))
 
-	emoji := actionEmoji[e.Action]
-	if emoji == "" {
-		emoji = "📋"
-	}
-
-	msg := fmt.Sprintf("%s *Issue #%d %s*\n\n", emoji, e.Number, e.Action)
-	msg += fmt.Sprintf("📌 %s\n", escapeMarkdown(e.Title))
-	msg += fmt.Sprintf("👤 By: %s\n", escapeMarkdown(e.User.Login))
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("<b>[%s]</b> %s/%s\n\n", label, escapeHTML(repo.Owner), escapeHTML(repo.Name)))
+	sb.WriteString(fmt.Sprintf("#%d %s\n", e.Number, escapeHTML(sanitizeUTF8(e.Title))))
+	sb.WriteString(fmt.Sprintf("Author: %s\n", escapeHTML(e.User.Login)))
 
 	if len(e.Labels) > 0 {
-		msg += fmt.Sprintf("🏷️ Labels: %v\n", e.Labels)
+		escapedLabels := make([]string, len(e.Labels))
+		for i, l := range e.Labels {
+			escapedLabels[i] = escapeHTML(l)
+		}
+		sb.WriteString(fmt.Sprintf("Labels: %s\n", strings.Join(escapedLabels, ", ")))
 	}
 
-	msg += fmt.Sprintf("\n[View Issue](%s)", e.URL)
+	sb.WriteString(fmt.Sprintf("\n<a href=\"%s\">View Issue</a>", escapeHTMLAttr(e.URL)))
 
-	return msg
+	return sb.String()
 }
 
 // FormatPRMessage formats a pull request event as a notification message.
 func (e *PullRequestEvent) FormatMessage(repo RepoInfo) string {
-	actionEmoji := map[string]string{
-		"opened":   "🔀",
-		"closed":   "❌",
-		"merged":   "🎊",
-		"reopened": "🔄",
-	}
-
 	action := e.Action
 	if e.Action == "closed" && e.Merged {
 		action = "merged"
 	}
+	label := fmt.Sprintf("PR %s", strings.ToUpper(action))
 
-	emoji := actionEmoji[action]
-	if emoji == "" {
-		emoji = "🔀"
-	}
-
-	msg := fmt.Sprintf("%s *PR #%d %s*\n\n", emoji, e.Number, action)
-	msg += fmt.Sprintf("📌 %s\n", escapeMarkdown(e.Title))
-	msg += fmt.Sprintf("👤 By: %s\n", escapeMarkdown(e.User.Login))
-	msg += fmt.Sprintf("🔀 %s → %s\n", escapeMarkdown(e.Head.Ref), escapeMarkdown(e.Base.Ref))
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("<b>[%s]</b> %s/%s\n\n", label, escapeHTML(repo.Owner), escapeHTML(repo.Name)))
+	sb.WriteString(fmt.Sprintf("#%d %s\n", e.Number, escapeHTML(sanitizeUTF8(e.Title))))
+	sb.WriteString(fmt.Sprintf("Author: %s\n", escapeHTML(e.User.Login)))
+	sb.WriteString(fmt.Sprintf("Branch: %s -> %s\n", escapeHTML(e.Head.Ref), escapeHTML(e.Base.Ref)))
 
 	if e.Commits > 0 {
-		msg += fmt.Sprintf("📊 %d commits, +%d/-%d lines\n", e.Commits, e.Additions, e.Deletions)
+		sb.WriteString(fmt.Sprintf("Stats: %d commits, +%d/-%d lines\n", e.Commits, e.Additions, e.Deletions))
 	}
 
-	msg += fmt.Sprintf("\n[View PR](%s)", e.URL)
+	sb.WriteString(fmt.Sprintf("\n<a href=\"%s\">View Pull Request</a>", escapeHTMLAttr(e.URL)))
 
-	return msg
+	return sb.String()
 }
 
 // Helper functions
@@ -231,27 +219,45 @@ func truncateString(s string, maxLen int) string {
 	return s[:maxLen-3] + "..."
 }
 
-// escapeMarkdown escapes special Markdown characters to prevent parsing errors.
-func escapeMarkdown(s string) string {
+// escapeHTML escapes HTML special characters for text content.
+func escapeHTML(s string) string {
 	replacer := strings.NewReplacer(
-		"_", "\\_",
-		"*", "\\*",
-		"[", "\\[",
-		"]", "\\]",
-		"(", "\\(",
-		")", "\\)",
-		"~", "\\~",
-		"`", "\\`",
-		">", "\\>",
-		"#", "\\#",
-		"+", "\\+",
-		"-", "\\-",
-		"=", "\\=",
-		"|", "\\|",
-		"{", "\\{",
-		"}", "\\}",
-		".", "\\.",
-		"!", "\\!",
+		"&", "&amp;",
+		"<", "&lt;",
+		">", "&gt;",
 	)
 	return replacer.Replace(s)
+}
+
+// escapeHTMLAttr escapes HTML special characters for use in attributes (like href).
+func escapeHTMLAttr(s string) string {
+	replacer := strings.NewReplacer(
+		"&", "&amp;",
+		"<", "&lt;",
+		">", "&gt;",
+		"\"", "&quot;",
+	)
+	return replacer.Replace(s)
+}
+
+// sanitizeUTF8 removes invalid UTF-8 sequences from a string.
+func sanitizeUTF8(s string) string {
+	if utf8.ValidString(s) {
+		return s
+	}
+	var sb strings.Builder
+	for _, r := range s {
+		if r != utf8.RuneError {
+			sb.WriteRune(r)
+		}
+	}
+	return sb.String()
+}
+
+// getFirstLine returns the first line of a string.
+func getFirstLine(s string) string {
+	if idx := strings.Index(s, "\n"); idx != -1 {
+		return s[:idx]
+	}
+	return s
 }
