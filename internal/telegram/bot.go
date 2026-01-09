@@ -33,6 +33,20 @@ func NewBot(token string, debug bool, store *storage.SubscriptionStore, ghClient
 
 	logger.Info().Str("username", api.Self.UserName).Msg("Telegram bot authorized")
 
+	// Set bot commands menu
+	commands := []tgbotapi.BotCommand{
+		{Command: "start", Description: "查看帮助信息"},
+		{Command: "help", Description: "显示帮助"},
+		{Command: "subscribe", Description: "订阅仓库 (格式: owner/repo)"},
+		{Command: "unsubscribe", Description: "取消订阅"},
+		{Command: "list", Description: "查看订阅列表"},
+		{Command: "status", Description: "查看机器人状态"},
+	}
+	setCommandsConfig := tgbotapi.NewSetMyCommands(commands...)
+	if _, err := api.Request(setCommandsConfig); err != nil {
+		logger.Warn().Err(err).Msg("Failed to set bot commands menu")
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	handlers := NewHandlers(api, store)
