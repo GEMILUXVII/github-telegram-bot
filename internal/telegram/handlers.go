@@ -65,6 +65,8 @@ func (h *Handlers) HandleCommand(msg *tgbotapi.Message) {
 		h.handleList(msg)
 	case "status":
 		h.handleStatus(msg)
+	case "test":
+		h.handleTest(msg)
 	default:
 		h.sendReply(msg.Chat.ID, "Unknown command. Use /help to see available commands.")
 	}
@@ -74,7 +76,9 @@ func (h *Handlers) HandleCommand(msg *tgbotapi.Message) {
 func (h *Handlers) HandleCallback(callback *tgbotapi.CallbackQuery) {
 	// Acknowledge the callback
 	callbackCfg := tgbotapi.NewCallback(callback.ID, "")
-	h.api.Send(callbackCfg)
+	if _, err := h.api.Send(callbackCfg); err != nil {
+		logger.Error().Err(err).Msg("Failed to send callback acknowledgement")
+	}
 
 	// Parse callback data
 	parts := strings.Split(callback.Data, ":")
@@ -258,15 +262,36 @@ func (h *Handlers) handleList(msg *tgbotapi.Message) {
 		return
 	}
 
-	text := fmt.Sprintf("*Subscriptions (%d)*\n\n", len(subs))
-	for i, sub := range subs {
-		text += fmt.Sprintf("%d. [`%s/%s`](https://github.com/%s/%s)\n",
-			i+1, sub.RepoOwner, sub.RepoName, sub.RepoOwner, sub.RepoName)
+	text := fmt.Sprintf("*Subscriptions (%d)*\n\nClick the button below to unsubscribe:", len(subs))
+
+	// Create inline keyboard with unsubscribe buttons
+	var rows [][]tgbotapi.InlineKeyboardButton
+	for _, sub := range subs {
+		repoFullName := fmt.Sprintf("%s/%s", sub.RepoOwner, sub.RepoName)
+		callbackData := fmt.Sprintf("unsub:%s:%s", sub.RepoOwner, sub.RepoName)
+
+		row := tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonURL(
+				repoFullName,
+				fmt.Sprintf("https://github.com/%s", repoFullName),
+			),
+			tgbotapi.NewInlineKeyboardButtonData(
+				"Unsubscribe",
+				callbackData,
+			),
+		)
+		rows = append(rows, row)
 	}
 
-	text += "\nUse `/unsubscribe owner/repo` to unsubscribe"
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(rows...)
 
-	h.sendMarkdown(msg.Chat.ID, text)
+	msgConfig := tgbotapi.NewMessage(msg.Chat.ID, text)
+	msgConfig.ParseMode = tgbotapi.ModeMarkdown
+	msgConfig.ReplyMarkup = keyboard
+
+	if _, err := h.api.Send(msgConfig); err != nil {
+		logger.Error().Err(err).Msg("Failed to send list message")
+	}
 }
 
 // handleStatus shows bot status information.
@@ -375,4 +400,149 @@ func parseRepoArg(arg string) (owner, repo string, err error) {
 	}
 
 	return owner, repo, nil
+}
+
+// handleTest sends sample notifications for all event types.
+func (h *Handlers) handleTest(msg *tgbotapi.Message) {
+	h.sendReply(msg.Chat.ID, "🧪 *Testing notification formats...*\n\nSending sample notifications for all event types:")
+
+	// Sample Push Event
+	pushEvent := &github.PushEvent{
+		Ref:       "refs/heads/main",
+		Before:    "abc1234567890",
+		After:     "def0987654321",
+		Pusher:    github.UserInfo{Login: "developer"},
+		Timestamp: time.Now(),
+		Commits: []github.CommitInfo{
+			{
+				SHA:       "def0987654321",
+				Message:   "feat: add new authentication module\n\nThis commit adds OAuth2 support",
+				Author:    github.UserInfo{Login: "developer"},
+				URL:       "https://github.com/example/repo/commit/def0987",
+				Additions: 150,
+				Deletions: 23,
+			},
+			{
+				SHA:       "abc1234567890",
+				Message:   "fix: resolve login redirect issue",
+				Author:    github.UserInfo{Login: "developer"},
+				URL:       "https://github.com/example/repo/commit/abc1234",
+				Additions: 12,
+				Deletions: 5,
+			},
+			{
+				SHA:       "ghi5678901234",
+				Message:   "docs: update README with new API endpoints",
+				Author:    github.UserInfo{Login: "contributor"},
+				URL:       "https://github.com/example/repo/commit/ghi5678",
+				Additions: 45,
+				Deletions: 10,
+			},
+		},
+		Compare: "https://github.com/example/repo/compare/abc1234...def0987",
+	}
+	pushMsg := pushEvent.FormatMessage(github.RepoInfo{Owner: "example", Name: "awesome-project"})
+	h.sendHTML(msg.Chat.ID, pushMsg)
+
+	// Sample Release Event
+	releaseEvent := &github.ReleaseEvent{
+		Action:      "published",
+		TagName:     "v2.1.0",
+		Name:        "Version 2.1.0 - Major Update",
+		Body:        "## What's New\n\n- **New Feature**: Added dark mode support\n- **Improvement**: Performance optimizations (50% faster)\n- **Bug Fix**: Fixed memory leak in background tasks\n\n## Breaking Changes\n\nNone in this release.\n\n## Contributors\n\nThanks to all contributors!",
+		Prerelease:  false,
+		URL:         "https://github.com/example/repo/releases/tag/v2.1.0",
+		Author:      github.UserInfo{Login: "maintainer"},
+		PublishedAt: time.Now(),
+		Assets: []github.ReleaseAsset{
+			{Name: "app-linux-amd64.tar.gz", Size: 15728640, DownloadCount: 1234},
+			{Name: "app-darwin-arm64.tar.gz", Size: 14680064, DownloadCount: 567},
+			{Name: "app-windows-amd64.zip", Size: 16777216, DownloadCount: 890},
+		},
+	}
+	releaseMsg := releaseEvent.FormatMessage(github.RepoInfo{Owner: "example", Name: "awesome-project"})
+	h.sendHTML(msg.Chat.ID, releaseMsg)
+
+	// Sample Issue Opened Event
+	issueOpenedEvent := &github.IssueEvent{
+		Action:    "opened",
+		Number:    1024,
+		Title:     "[Bug] Application crashes when using Chinese characters in search",
+		Body:      "## Description\n\nWhen I try to search with Chinese characters like \"测试\", the application crashes immediately.\n\n## Steps to Reproduce\n\n1. Open the search dialog\n2. Type any Chinese characters\n3. App crashes\n\n## Expected Behavior\n\nSearch should work with all Unicode characters.\n\n## Environment\n\n- OS: Windows 11\n- Version: 2.0.5",
+		State:     "open",
+		URL:       "https://github.com/example/repo/issues/1024",
+		User:      github.UserInfo{Login: "bug-reporter"},
+		Labels:    []string{"bug", "high-priority", "i18n"},
+		CreatedAt: time.Now(),
+	}
+	issueOpenedMsg := issueOpenedEvent.FormatMessage(github.RepoInfo{Owner: "example", Name: "awesome-project"})
+	h.sendHTML(msg.Chat.ID, issueOpenedMsg)
+
+	// Sample Issue Closed Event
+	issueClosedEvent := &github.IssueEvent{
+		Action:    "closed",
+		Number:    1020,
+		Title:     "Add support for custom themes",
+		Body:      "Feature request: Allow users to create and share custom themes.",
+		State:     "closed",
+		URL:       "https://github.com/example/repo/issues/1020",
+		User:      github.UserInfo{Login: "feature-requester"},
+		Labels:    []string{"enhancement", "completed"},
+		CreatedAt: time.Now().Add(-24 * time.Hour),
+	}
+	issueClosedMsg := issueClosedEvent.FormatMessage(github.RepoInfo{Owner: "example", Name: "awesome-project"})
+	h.sendHTML(msg.Chat.ID, issueClosedMsg)
+
+	// Sample PR Opened Event
+	prOpenedEvent := &github.PullRequestEvent{
+		Action:    "opened",
+		Number:    256,
+		Title:     "feat: implement OAuth2 authentication flow",
+		Body:      "## Summary\n\nThis PR implements the OAuth2 authentication flow as discussed in #200.\n\n## Changes\n\n- Added OAuth2 provider configuration\n- Implemented token refresh mechanism\n- Added unit tests for auth module\n\n## Testing\n\n- [x] Unit tests pass\n- [x] Integration tests pass\n- [x] Manual testing completed",
+		State:     "open",
+		URL:       "https://github.com/example/repo/pull/256",
+		User:      github.UserInfo{Login: "contributor"},
+		Merged:    false,
+		Base:      github.BranchInfo{Ref: "main"},
+		Head:      github.BranchInfo{Ref: "feature/oauth2-auth"},
+		Additions: 523,
+		Deletions: 47,
+		Commits:   8,
+		CreatedAt: time.Now(),
+	}
+	prOpenedMsg := prOpenedEvent.FormatMessage(github.RepoInfo{Owner: "example", Name: "awesome-project"})
+	h.sendHTML(msg.Chat.ID, prOpenedMsg)
+
+	// Sample PR Merged Event
+	prMergedEvent := &github.PullRequestEvent{
+		Action:    "closed",
+		Number:    250,
+		Title:     "fix: resolve memory leak in websocket handler",
+		Body:      "Fixes the memory leak reported in #245. The issue was caused by unclosed goroutines.",
+		State:     "closed",
+		URL:       "https://github.com/example/repo/pull/250",
+		User:      github.UserInfo{Login: "senior-dev"},
+		Merged:    true,
+		MergedBy:  &github.UserInfo{Login: "maintainer"},
+		Base:      github.BranchInfo{Ref: "main"},
+		Head:      github.BranchInfo{Ref: "fix/memory-leak"},
+		Additions: 25,
+		Deletions: 180,
+		Commits:   3,
+		CreatedAt: time.Now().Add(-2 * time.Hour),
+	}
+	prMergedMsg := prMergedEvent.FormatMessage(github.RepoInfo{Owner: "example", Name: "awesome-project"})
+	h.sendHTML(msg.Chat.ID, prMergedMsg)
+
+	h.sendReply(msg.Chat.ID, "✅ *Test complete!*\n\nAbove are sample notifications for:\n• 📦 Push (commits)\n• 🚀 Release\n• 🐛 Issue Opened\n• ✅ Issue Closed\n• 🔀 PR Opened\n• 🎉 PR Merged")
+}
+
+// sendHTML sends an HTML-formatted message.
+func (h *Handlers) sendHTML(chatID int64, text string) {
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = tgbotapi.ModeHTML
+	msg.DisableWebPagePreview = true
+	if _, err := h.api.Send(msg); err != nil {
+		logger.Error().Err(err).Msg("Failed to send HTML message")
+	}
 }

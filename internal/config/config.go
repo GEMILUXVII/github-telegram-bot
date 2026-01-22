@@ -15,12 +15,14 @@ type Config struct {
 	Database DatabaseConfig `mapstructure:"database"`
 	Server   ServerConfig   `mapstructure:"server"`
 	Log      LogConfig      `mapstructure:"log"`
+	Timezone string         `mapstructure:"timezone"` // Timezone for notifications, e.g., "Asia/Shanghai", "UTC"
 }
 
 // TelegramConfig holds Telegram bot configuration.
 type TelegramConfig struct {
 	Token string `mapstructure:"token"`
 	Debug bool   `mapstructure:"debug"`
+	Proxy string `mapstructure:"proxy"` // HTTP/SOCKS5 proxy URL, e.g., "socks5://127.0.0.1:1080" or "http://127.0.0.1:7890"
 }
 
 // GitHubConfig holds GitHub API configuration.
@@ -60,6 +62,7 @@ func Load(configPath string) (*Config, error) {
 	v.SetDefault("telegram.debug", false)
 	v.SetDefault("github.mode", "polling")    // Default to polling for monitoring any repo
 	v.SetDefault("github.poll_interval", 300) // 5 minutes default
+	v.SetDefault("timezone", "UTC")           // Default timezone
 
 	// Read config file
 	if configPath != "" {

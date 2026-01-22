@@ -4,6 +4,8 @@ package telegram
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -11,6 +13,7 @@ import (
 	"github.com/user/githubbot/internal/github"
 	"github.com/user/githubbot/internal/storage"
 	"github.com/user/githubbot/pkg/logger"
+	"golang.org/x/net/proxy"
 )
 
 // Bot represents the Telegram bot.
@@ -23,8 +26,22 @@ type Bot struct {
 }
 
 // NewBot creates a new Telegram bot instance.
-func NewBot(token string, debug bool, store *storage.SubscriptionStore, ghClient *github.Client) (*Bot, error) {
-	api, err := tgbotapi.NewBotAPI(token)
+func NewBot(token string, debug bool, proxyURL string, store *storage.SubscriptionStore, ghClient *github.Client) (*Bot, error) {
+	var api *tgbotapi.BotAPI
+	var err error
+
+	// Configure proxy if provided
+	if proxyURL != "" {
+		httpClient, proxyErr := createProxyClient(proxyURL)
+		if proxyErr != nil {
+			return nil, fmt.Errorf("failed to create proxy client: %w", proxyErr)
+		}
+		api, err = tgbotapi.NewBotAPIWithClient(token, tgbotapi.APIEndpoint, httpClient)
+		logger.Info().Str("proxy", proxyURL).Msg("Using proxy for Telegram API")
+	} else {
+		api, err = tgbotapi.NewBotAPI(token)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to create bot: %w", err)
 	}
@@ -134,4 +151,58 @@ func (b *Bot) SendMarkdownMessage(chatID int64, text string) error {
 // GetAPI returns the underlying bot API for direct access.
 func (b *Bot) GetAPI() *tgbotapi.BotAPI {
 	return b.api
+}
+
+// createProxyClient creates an HTTP client with proxy support.
+// Supports both HTTP(S) and SOCKS5 proxies.
+func createProxyClient(proxyURL string) (*http.Client, error) {
+	parsedURL, err := url.Parse(proxyURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid proxy URL: %w", err)
+	}
+
+	var transport *http.Transport
+
+	switch parsedURL.Scheme {
+	case "socks5", "socks5h":
+		// SOCKS5 proxy
+		var auth *proxy.Auth
+		if parsedURL.User != nil {
+			auth = &proxy.Auth{
+				User: parsedURL.User.Username(),
+			}
+			auth.Password, _ = parsedURL.User.Password()
+		}
+
+		dialer, err := proxy.SOCKS5("tcp", parsedURL.Host, auth, proxy.Direct)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create SOCKS5 dialer: %w", err)
+		}
+
+		// Type assert to get ContextDialer if available
+		contextDialer, ok := dialer.(proxy.ContextDialer)
+		if ok {
+			transport = &http.Transport{
+				DialContext: contextDialer.DialContext,
+			}
+		} else {
+			transport = &http.Transport{
+				Dial: dialer.Dial,
+			}
+		}
+
+	case "http", "https":
+		// HTTP(S) proxy
+		transport = &http.Transport{
+			Proxy: http.ProxyURL(parsedURL),
+		}
+
+	default:
+		return nil, fmt.Errorf("unsupported proxy scheme: %s (use http, https, or socks5)", parsedURL.Scheme)
+	}
+
+	return &http.Client{
+		Transport: transport,
+		Timeout:   60 * time.Second,
+	}, nil
 }

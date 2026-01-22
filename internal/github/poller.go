@@ -117,7 +117,7 @@ func (p *Poller) recordExistingEvents(owner, name string) {
 		for _, commit := range commits {
 			sha := commit.GetSHA()
 			if sha != "" {
-				p.store.RecordEvent(owner, name, "push", sha)
+				_ = p.store.RecordEvent(owner, name, "push", sha)
 			}
 		}
 	}
@@ -128,7 +128,7 @@ func (p *Poller) recordExistingEvents(owner, name string) {
 		for _, release := range releases {
 			if !release.GetDraft() {
 				eventID := fmt.Sprintf("release-%s", release.GetTagName())
-				p.store.RecordEvent(owner, name, "release", eventID)
+				_ = p.store.RecordEvent(owner, name, "release", eventID)
 			}
 		}
 	}
@@ -145,11 +145,11 @@ func (p *Poller) recordExistingEvents(owner, name string) {
 			if !issue.IsPullRequest() {
 				// 使用 "issue-创建" 作为唯一标识，只通知新创建的 issue
 				eventID := fmt.Sprintf("issue-%d-created", issue.GetNumber())
-				p.store.RecordEvent(owner, name, "issues", eventID)
+				_ = p.store.RecordEvent(owner, name, "issues", eventID)
 				// 同时记录关闭事件（如果已关闭）
 				if issue.GetState() == "closed" {
 					eventID = fmt.Sprintf("issue-%d-closed", issue.GetNumber())
-					p.store.RecordEvent(owner, name, "issues", eventID)
+					_ = p.store.RecordEvent(owner, name, "issues", eventID)
 				}
 			}
 		}
@@ -166,7 +166,7 @@ func (p *Poller) recordExistingEvents(owner, name string) {
 		for _, pr := range prs {
 			// 使用 "pr-创建" 作为唯一标识
 			eventID := fmt.Sprintf("pr-%d-created", pr.GetNumber())
-			p.store.RecordEvent(owner, name, "pull_request", eventID)
+			_ = p.store.RecordEvent(owner, name, "pull_request", eventID)
 			// 记录合并/关闭事件（如果已完成）
 			if pr.GetState() == "closed" {
 				if pr.GetMerged() {
@@ -174,7 +174,7 @@ func (p *Poller) recordExistingEvents(owner, name string) {
 				} else {
 					eventID = fmt.Sprintf("pr-%d-closed", pr.GetNumber())
 				}
-				p.store.RecordEvent(owner, name, "pull_request", eventID)
+				_ = p.store.RecordEvent(owner, name, "pull_request", eventID)
 			}
 		}
 	}

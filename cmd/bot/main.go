@@ -28,7 +28,7 @@ func main() {
 	cfg, err := config.Load(*configPath)
 	if err != nil {
 		// Try to initialize basic logger for error output
-		logger.Init(true, "")
+		_ = logger.Init(true, "")
 		logger.Fatal().Err(err).Msg("Failed to load configuration")
 	}
 
@@ -40,6 +40,13 @@ func main() {
 
 	logger.Info().Msg("Starting GitHub Telegram Bot")
 	logger.Info().Str("mode", cfg.GitHub.Mode).Msg("GitHub monitoring mode")
+
+	// Set timezone
+	if err := github.SetTimezone(cfg.Timezone); err != nil {
+		logger.Warn().Err(err).Str("timezone", cfg.Timezone).Msg("Invalid timezone, using UTC")
+	} else {
+		logger.Info().Str("timezone", cfg.Timezone).Msg("Timezone configured")
+	}
 
 	// Initialize database
 	db, err := storage.NewDatabase(cfg.Database.Path)
@@ -55,7 +62,7 @@ func main() {
 	ghClient := github.NewClient(cfg.GitHub.Token)
 
 	// Initialize Telegram bot
-	bot, err := telegram.NewBot(cfg.Telegram.Token, cfg.Telegram.Debug, store, ghClient)
+	bot, err := telegram.NewBot(cfg.Telegram.Token, cfg.Telegram.Debug, cfg.Telegram.Proxy, store, ghClient)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Failed to initialize Telegram bot")
 	}
@@ -95,7 +102,7 @@ func main() {
 	// Health check endpoint
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	// GitHub webhook endpoint (if webhook or both mode)
