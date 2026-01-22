@@ -7,7 +7,7 @@
 <br>
 
 <div align="center">
-  <a href="#"><img src="https://img.shields.io/badge/version-v1.0.0-9644F4?style=for-the-badge" alt="Version"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-v1.2.0-9644F4?style=for-the-badge" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-E53935?style=for-the-badge" alt="License"></a>
   <a href="https://go.dev/"><img src="https://img.shields.io/badge/Go-1.23+-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go"></a>
   <a href="https://hub.docker.com/r/gemiluxvii/github-telegram-bot"><img src="https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker"></a>
@@ -38,6 +38,9 @@
 - **Pull Request Tracking** - Track PR status changes
 - **Monitor Any Public Repo** - No repository admin access required
 - **Persistent Storage** - SQLite database for subscription management
+- **Proxy Support** - HTTP/SOCKS5 proxy for Telegram API (v1.2.0+)
+- **Timezone Configuration** - Customize notification timestamps (v1.2.0+)
+- **Clean Notification Format** - Emoji tags and markdown-stripped content (v1.2.0+)
 
 ## Project Structure
 
@@ -137,11 +140,15 @@ docker-compose up -d
 telegram:
   token: "YOUR_BOT_TOKEN"
   debug: false
+  proxy: "socks5://127.0.0.1:1080"  # Optional: HTTP/SOCKS5 proxy
 
 github:
   token: "ghp_xxxx"           # Strongly recommended
   mode: "polling"             # polling / webhook / both
   poll_interval: 300          # Seconds
+
+# Timezone for notifications (e.g., "Asia/Shanghai", "America/New_York")
+timezone: "UTC"
 
 database:
   path: "./data/bot.db"
@@ -150,6 +157,28 @@ server:
   host: "0.0.0.0"
   port: 8080
 ```
+
+### Proxy Configuration
+
+If you're in a region where Telegram is blocked, configure a proxy:
+
+| Proxy Type | Example |
+|------------|---------|
+| HTTP | `http://127.0.0.1:7890` |
+| SOCKS5 | `socks5://127.0.0.1:1080` |
+| With Auth | `socks5://user:pass@127.0.0.1:1080` |
+
+### Timezone Configuration
+
+Common timezone values:
+
+| Timezone | Description |
+|----------|-------------|
+| `UTC` | Coordinated Universal Time (default) |
+| `Asia/Shanghai` | China Standard Time (UTC+8) |
+| `Asia/Tokyo` | Japan Standard Time (UTC+9) |
+| `America/New_York` | Eastern Time |
+| `Europe/London` | British Time |
 
 ### Environment Variables
 
@@ -176,8 +205,9 @@ Get one at: https://github.com/settings/tokens
 | `/help` | Show help documentation |
 | `/subscribe <owner/repo>` | Subscribe to a repository |
 | `/unsubscribe <owner/repo>` | Unsubscribe from a repository |
-| `/list` | View current subscriptions |
+| `/list` | View current subscriptions (with quick unsubscribe buttons) |
 | `/status` | Show bot status and API quota |
+| `/test` | Preview all notification formats |
 
 **Shortcuts:** `/sub`, `/unsub`
 

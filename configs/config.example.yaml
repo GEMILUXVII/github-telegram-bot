@@ -4,6 +4,9 @@ telegram:
   token: ""
   # 是否启用调试模式
   debug: false
+  # 代理设置 (可选，支持 HTTP/SOCKS5)
+  # 示例: "http://127.0.0.1:7890" 或 "socks5://127.0.0.1:1080"
+  proxy: ""
 
 # GitHub 配置
 github:
@@ -11,18 +14,22 @@ github:
   # 无 Token: 60 次/小时, 有 Token: 5000 次/小时
   # 获取地址: https://github.com/settings/tokens
   token: ""
-  
+
   # Webhook 密钥 (仅 webhook 模式需要)
   webhook_secret: ""
-  
+
   # 监控模式:
   #   - "polling"  : 轮询模式，可监控任意公有仓库 (推荐)
   #   - "webhook"  : Webhook 模式，需要仓库管理权限
   #   - "both"     : 同时启用两种模式
   mode: "polling"
-  
+
   # 轮询间隔 (秒)，建议不低于 300 秒 (5分钟) 以避免 API 限制
   poll_interval: 300
+
+# 时区配置 (用于通知时间显示)
+# 示例: "Asia/Shanghai", "America/New_York", "Europe/London"
+timezone: "UTC"
 
 # 数据库配置
 database:

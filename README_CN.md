@@ -7,7 +7,7 @@
 <br>
 
 <div align="center">
-  <a href="#"><img src="https://img.shields.io/badge/version-v1.0.0-9644F4?style=for-the-badge" alt="Version"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-v1.2.0-9644F4?style=for-the-badge" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-E53935?style=for-the-badge" alt="License"></a>
   <a href="https://go.dev/"><img src="https://img.shields.io/badge/Go-1.23+-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go"></a>
   <a href="https://hub.docker.com/r/gemiluxvii/github-telegram-bot"><img src="https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker"></a>
@@ -38,6 +38,9 @@
 - **Pull Request 监控** - PR 状态变更提醒
 - **监控任意公有仓库** - 不需要仓库管理权限
 - **持久化存储** - SQLite 数据库存储订阅信息
+- **代理支持** - 支持 HTTP/SOCKS5 代理访问 Telegram API (v1.2.0+)
+- **时区配置** - 自定义通知时间显示格式 (v1.2.0+)
+- **清爽通知格式** - Emoji 标签 + 自动清理 Markdown 格式 (v1.2.0+)
 
 ## 项目结构
 
@@ -137,11 +140,15 @@ docker-compose up -d
 telegram:
   token: "YOUR_BOT_TOKEN"
   debug: false
+  proxy: "socks5://127.0.0.1:1080"  # 可选：HTTP/SOCKS5 代理
 
 github:
   token: "ghp_xxxx"           # 强烈建议设置
   mode: "polling"             # polling / webhook / both
   poll_interval: 300          # 轮询间隔 (秒)
+
+# 通知时区 (如 "Asia/Shanghai", "America/New_York")
+timezone: "Asia/Shanghai"
 
 database:
   path: "./data/bot.db"
@@ -150,6 +157,28 @@ server:
   host: "0.0.0.0"
   port: 8080
 ```
+
+### 代理配置
+
+如果你所在地区无法直接访问 Telegram，可以配置代理：
+
+| 代理类型 | 示例 |
+|---------|------|
+| HTTP | `http://127.0.0.1:7890` |
+| SOCKS5 | `socks5://127.0.0.1:1080` |
+| 带认证 | `socks5://user:pass@127.0.0.1:1080` |
+
+### 时区配置
+
+常用时区：
+
+| 时区 | 说明 |
+|------|------|
+| `UTC` | 协调世界时 (默认) |
+| `Asia/Shanghai` | 中国标准时间 (UTC+8) |
+| `Asia/Tokyo` | 日本标准时间 (UTC+9) |
+| `America/New_York` | 美国东部时间 |
+| `Europe/London` | 英国时间 |
 
 ### 环境变量配置
 
@@ -176,8 +205,9 @@ export GHBOT_GITHUB_MODE="polling"
 | `/help` | 显示帮助文档 |
 | `/subscribe <owner/repo>` | 订阅仓库 |
 | `/unsubscribe <owner/repo>` | 取消订阅 |
-| `/list` | 查看当前订阅 |
+| `/list` | 查看当前订阅 (带快捷取消按钮) |
 | `/status` | 显示 Bot 状态和 API 配额 |
+| `/test` | 预览所有通知格式 |
 
 **快捷命令：** `/sub`, `/unsub`
 
